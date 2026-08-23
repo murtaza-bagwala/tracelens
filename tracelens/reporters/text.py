@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from tracelens.models.experiment import ExperimentComparison
 from tracelens.models.review import BatchSummary, Comparison, Review
 
 _RULE = "-" * 48
@@ -131,6 +132,57 @@ def render_comparison_text(comparison: Comparison) -> str:
     best_width = max(len("Best"), *(len(best_col) for _, _, best_col in rows)) + 2
 
     lines = [_RULE, "Experiment Comparison", _RULE, ""]
+
+    header = "Metric".ljust(metric_width)
+    header += "".join(label.ljust(w) for label, w in zip(labels, col_widths))
+    header += "Best".ljust(best_width)
+    lines.append(header.rstrip())
+
+    for title, values, best_col in rows:
+        line = title.ljust(metric_width)
+        line += "".join(v.ljust(w) for v, w in zip(values, col_widths))
+        line += best_col.ljust(best_width)
+        lines.append(line.rstrip())
+
+    lines.append("")
+    lines.append(_RULE)
+
+    return "\n".join(lines)
+
+
+# (row title, best-metric key or None, value extractor over a BatchSummary)
+_EXPERIMENT_ROWS = [
+    ("Success Rate", "success_rate", lambda batch: f"{batch.success_rate * 100:.1f}%"),
+    ("Avg Duration (s)", "avg_duration_ms", lambda batch: f"{batch.avg_duration_ms / 1000:.2f}"),
+    ("Avg Tokens", "avg_tokens", lambda batch: f"{batch.avg_tokens:.0f}"),
+    ("Avg Cost", "avg_cost", lambda batch: f"${batch.avg_cost:.4f}"),
+    (
+        "Avg Issues",
+        "avg_issue_count",
+        lambda batch: f"{sum(batch.issue_counts.values()) / max(len(batch.entries), 1):.2f}",
+    ),
+    ("Traces", None, lambda batch: str(len(batch.entries))),
+]
+
+
+def render_experiment_comparison_text(comparison: ExperimentComparison) -> str:
+    entries = comparison.entries
+    labels = [entry.label for entry in entries]
+
+    rows = []
+    for title, metric_key, value_of in _EXPERIMENT_ROWS:
+        values = [value_of(entry.batch) for entry in entries]
+        best_col = (comparison.best.get(metric_key) or "tie") if metric_key is not None else "-"
+        rows.append((title, values, best_col))
+
+    metric_width = max(len("Metric"), *(len(title) for title, _, _ in rows)) + 2
+    col_widths = [
+        max(len(label), *(len(values[i]) for _, values, _ in rows)) + 2
+        for i, label in enumerate(labels)
+    ]
+    best_width = max(len("Best"), *(len(best_col) for _, _, best_col in rows)) + 2
+
+    lines = [_RULE, "Experiment Results (aggregated over the dataset)", _RULE, ""]
 
     header = "Metric".ljust(metric_width)
     header += "".join(label.ljust(w) for label, w in zip(labels, col_widths))

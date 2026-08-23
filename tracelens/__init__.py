@@ -3,6 +3,11 @@
 from tracelens.analyzer.batch import analyze_batch
 from tracelens.analyzer.comparison import compare_traces
 from tracelens.analyzer.engine import AnalyzerConfig, analyze_trace
+from tracelens.experiments.comparison import compare_experiments
+from tracelens.experiments.runner import run_experiment
+from tracelens.models.dataset import Dataset, DatasetRow
+from tracelens.models.experiment import ExperimentComparison, ExperimentEntry
+from tracelens.models.loop_config import LoopConfig
 from tracelens.models.review import (
     BatchSummary,
     Comparison,
@@ -18,10 +23,19 @@ from tracelens.reporters.json_reporter import (
     batch_to_json,
     comparison_to_dict,
     comparison_to_json,
+    experiment_comparison_to_dict,
+    experiment_comparison_to_json,
     to_dict,
     to_json,
 )
-from tracelens.reporters.text import render_batch_text, render_comparison_text, render_text
+from tracelens.reporters.text import (
+    render_batch_text,
+    render_comparison_text,
+    render_experiment_comparison_text,
+    render_text,
+)
+from tracelens.runtime.loop import run_loop
+from tracelens.runtime.model_client import MockModelClient, ModelClient, ModelResponse
 
 __version__ = "0.1.0"
 
@@ -48,4 +62,18 @@ __all__ = [
     "comparison_to_json",
     "batch_to_dict",
     "batch_to_json",
+    "Dataset",
+    "DatasetRow",
+    "LoopConfig",
+    "ModelClient",
+    "ModelResponse",
+    "MockModelClient",
+    "run_loop",
+    "run_experiment",
+    "compare_experiments",
+    "ExperimentEntry",
+    "ExperimentComparison",
+    "render_experiment_comparison_text",
+    "experiment_comparison_to_dict",
+    "experiment_comparison_to_json",
 ]

@@ -1,0 +1,8 @@
+{
+  "name": "retries_only",
+  "planner": { "type": "llm" },
+  "executor": { "type": "rag" },
+  "evaluator": { "type": "keyword_overlap", "pass_threshold": 0.6 },
+  "reflection": { "enabled": false },
+  "retries": 2
+}

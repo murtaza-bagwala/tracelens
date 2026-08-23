@@ -1,0 +1,35 @@
+{
+  "name": "insurance_faq",
+  "rows": [
+    {
+      "id": "deductible",
+      "input": "What is the deductible on the Basic Travel plan?",
+      "reference": "The Basic Travel plan has a $250 deductible per claim.",
+      "context": "The Basic Travel plan is our entry-level travel insurance product, covering trip cancellation and baggage loss."
+    },
+    {
+      "id": "luggage_claim_window",
+      "input": "How many days do I have to file a claim for lost luggage?",
+      "reference": "You must file a lost luggage claim within 21 days of the incident.",
+      "context": "Our luggage coverage reimburses lost or damaged bags reported promptly to the airline and to us."
+    },
+    {
+      "id": "rental_car_damage",
+      "input": "Is rental car damage covered under the Premium plan?",
+      "reference": "The Premium plan covers rental car damage up to $50,000 with a $500 excess.",
+      "context": "The Premium plan is our top-tier product offering broad coverage for vehicles, medical expenses, and trip interruptions."
+    },
+    {
+      "id": "booking_cancellation_fee",
+      "input": "What is the cancellation policy for a flight booking made through the app?",
+      "reference": "Bookings can be cancelled free of charge within 24 hours of purchase, after which a $75 fee applies.",
+      "context": "Our booking system allows changes and cancellations through the app or website, subject to the fare rules of the airline."
+    },
+    {
+      "id": "covid_cancellation",
+      "input": "Does the Basic Travel plan cover COVID-19 related trip cancellations?",
+      "reference": "Yes, the Basic Travel plan covers COVID-19 related cancellations up to $1,000 per person.",
+      "context": "The Basic Travel plan covers a range of illness-related cancellations under its standard medical exclusions clause."
+    }
+  ]
+}

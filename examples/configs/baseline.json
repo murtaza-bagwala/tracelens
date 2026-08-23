@@ -1,0 +1,8 @@
+{
+  "name": "baseline",
+  "planner": { "type": "none" },
+  "executor": { "type": "single_call" },
+  "evaluator": { "type": "keyword_overlap", "pass_threshold": 0.6 },
+  "reflection": { "enabled": false },
+  "retries": 0
+}

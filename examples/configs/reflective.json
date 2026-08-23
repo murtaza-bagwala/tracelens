@@ -1,0 +1,8 @@
+{
+  "name": "reflective",
+  "planner": { "type": "llm" },
+  "executor": { "type": "rag" },
+  "evaluator": { "type": "keyword_overlap", "pass_threshold": 0.6 },
+  "reflection": { "enabled": true },
+  "retries": 2
+}

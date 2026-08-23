@@ -15,9 +15,23 @@ from tracelens.analyzer.cost import DEFAULT_COST_THRESHOLD
 from tracelens.analyzer.engine import AnalyzerConfig, analyze_trace
 from tracelens.analyzer.retrieval import DEFAULT_MIN_DOCUMENTS
 from tracelens.analyzer.token_usage import DEFAULT_TOKEN_THRESHOLD
+from tracelens.experiments.comparison import compare_experiments
+from tracelens.experiments.runner import run_experiment
+from tracelens.models.dataset import Dataset
+from tracelens.models.loop_config import LoopConfig
 from tracelens.models.trace import ExecutionTrace
-from tracelens.reporters.json_reporter import batch_to_json, comparison_to_json, to_json
-from tracelens.reporters.text import render_batch_text, render_comparison_text, render_text
+from tracelens.reporters.json_reporter import (
+    batch_to_json,
+    comparison_to_json,
+    experiment_comparison_to_json,
+    to_json,
+)
+from tracelens.reporters.text import (
+    render_batch_text,
+    render_comparison_text,
+    render_experiment_comparison_text,
+    render_text,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -105,6 +119,56 @@ def build_parser() -> argparse.ArgumentParser:
         "flagged as token concentration.",
     )
     compare.add_argument(
+        "--cost-threshold",
+        type=float,
+        default=DEFAULT_COST_THRESHOLD,
+        help="Share (0-1) of total run cost a single step must reach to be "
+        "flagged as cost concentration.",
+    )
+
+    experiment = subparsers.add_parser(
+        "experiment",
+        help="Run two or more loop configs over the same dataset and print "
+        "a ranked comparison.",
+    )
+    experiment.add_argument("dataset_path", help="Path to a dataset JSON file.")
+    experiment.add_argument(
+        "--config",
+        dest="configs",
+        action="append",
+        required=True,
+        help="Path to a loop config JSON file. Repeat for each config to "
+        "compare (at least two required).",
+    )
+    experiment.add_argument(
+        "--format", choices=("text", "json"), default="text", help="Output format."
+    )
+    experiment.add_argument(
+        "--labels",
+        help="Comma-separated labels, one per --config, in the same order "
+        "(default: each config's 'name' field).",
+    )
+    experiment.add_argument(
+        "--min-documents",
+        type=int,
+        default=DEFAULT_MIN_DOCUMENTS,
+        help="Minimum documents a retrieval step should return before it's flagged.",
+    )
+    experiment.add_argument(
+        "--latency-threshold",
+        type=float,
+        default=DEFAULT_LATENCY_THRESHOLD,
+        help="Share (0-1) of total execution time a tool/retrieval step must "
+        "reach to be flagged as a latency bottleneck.",
+    )
+    experiment.add_argument(
+        "--token-threshold",
+        type=float,
+        default=DEFAULT_TOKEN_THRESHOLD,
+        help="Share (0-1) of total LLM tokens a single step must reach to be "
+        "flagged as token concentration.",
+    )
+    experiment.add_argument(
         "--cost-threshold",
         type=float,
         default=DEFAULT_COST_THRESHOLD,
@@ -223,6 +287,54 @@ def _run_compare(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_experiment(args: argparse.Namespace) -> int:
+    if len(args.configs) < 2:
+        print(
+            "Error: experiment requires at least two --config files "
+            f"(found {len(args.configs)}).",
+            file=sys.stderr,
+        )
+        return 1
+
+    try:
+        dataset = Dataset.load(args.dataset_path)
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+
+    configs = []
+    for path in args.configs:
+        try:
+            configs.append(LoopConfig.load(path))
+        except (OSError, json.JSONDecodeError, ValueError) as exc:
+            print(f"Error loading '{path}': {exc}", file=sys.stderr)
+            return 1
+
+    if args.labels:
+        labels = [label.strip() for label in args.labels.split(",")]
+        if len(labels) != len(configs):
+            print(
+                f"Error: got {len(labels)} labels for {len(configs)} "
+                "config files — they must match 1:1.",
+                file=sys.stderr,
+            )
+            return 1
+    else:
+        labels = [config.name for config in configs]
+
+    entries = run_experiment(
+        dataset, list(zip(labels, configs)), analyzer_config=_config_from_args(args)
+    )
+    comparison = compare_experiments(entries)
+
+    if args.format == "json":
+        print(experiment_comparison_to_json(comparison))
+    else:
+        print(render_experiment_comparison_text(comparison))
+
+    return 0
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -231,6 +343,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return _run_analyze(args)
     if args.command == "compare":
         return _run_compare(args)
+    if args.command == "experiment":
+        return _run_experiment(args)
 
     parser.print_help()
     return 1

@@ -12,9 +12,17 @@ different loop configurations — and it ranks them side by side. Point it at a
 whole directory of traces and it summarizes the batch: success rate, average
 cost/latency/tokens, and which issues show up most often across the dataset.
 
+Point it at a dataset and two or more loop *configs* (planner/executor/
+evaluator/reflection/retries) instead, and it actually **runs** each config
+over every row — with a deterministic mock model backend, no API key
+required — and prints a ranked comparison: does reflection pay for itself?
+Do retries alone help, or only retries *plus* reflection?
+
 See [DESIGN.md](DESIGN.md) for the longer-term vision (an experimentation
-platform for reasoning-loop architectures). This tool is the analysis layer of
-that vision, usable today against traces you already have.
+platform for reasoning-loop architectures). This tool is both the analysis
+layer of that vision (usable today against traces you already have) and a
+first slice of the execution layer (running configured loops over a dataset
+yourself, rather than hand-authoring trace JSON).
 
 ## Install
 
@@ -41,6 +49,11 @@ tracelens compare examples/sample_trace.json examples/sample_trace_reflective.js
 
 # Compare every trace in a directory
 tracelens compare examples/
+
+# Actually run two loop architectures over the same dataset and compare them
+tracelens experiment examples/datasets/insurance_faq.json \
+  --config examples/configs/baseline.json \
+  --config examples/configs/reflective.json
 ```
 
 ## Commands
@@ -80,6 +93,20 @@ expansion.
 | `--format {text,json}` | `text` | Output format. |
 | `--labels a,b,...` | filename stems | One label per trace path, in order. |
 | `--min-documents` / `--latency-threshold` / `--token-threshold` / `--cost-threshold` | same as `analyze` | Detector thresholds, shared across all traces being compared. |
+
+### `tracelens experiment <dataset> --config <config> --config <config> ...`
+
+Actually **runs** two or more loop configs over every row of a dataset (with
+a deterministic mock model backend — no API key, no network calls), then
+aggregates each config's results with the same analyzer used by `analyze`
+and ranks the configs against each other.
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--config` | *(required, ≥2)* | Path to a loop config JSON file. Repeat once per config to compare. |
+| `--format {text,json}` | `text` | Output format. |
+| `--labels a,b,...` | each config's `name` field | One label per `--config`, in order. |
+| `--min-documents` / `--latency-threshold` / `--token-threshold` / `--cost-threshold` | same as `analyze` | Detector thresholds, applied to every generated trace before aggregation. |
 
 ## Trace format
 
@@ -143,6 +170,61 @@ Unknown fields are preserved but ignored by the analyzer.
 Each detected issue maps to a suggestion (e.g. "cache or parallelize this
 step", "add a reflection step before returning").
 
+## Dataset format (for `tracelens experiment`)
+
+A dataset is a JSON object with a name and a list of rows to run through a
+loop:
+
+```json
+{
+  "name": "insurance_faq",
+  "rows": [
+    {
+      "id": "deductible",
+      "input": "What is the deductible on the Basic Travel plan?",
+      "reference": "The Basic Travel plan has a $250 deductible per claim.",
+      "context": "The Basic Travel plan is our entry-level travel insurance product..."
+    }
+  ]
+}
+```
+
+| Field | Required | Meaning |
+|---|---|---|
+| `id` | yes | Row identifier, used as its label within a batch. |
+| `input` | yes | The task/question given to the loop. |
+| `reference` | yes | The expected answer, scored against by the mock evaluator. |
+| `context` | no | What a real retrieval step would have found. Ignored by a `single_call` executor; used by a `rag` executor. |
+| `metadata` | no | Free-form extra fields (e.g. category, difficulty). Not used by the runtime today. |
+
+## Loop config format (for `tracelens experiment`)
+
+A loop config describes one swappable reasoning-loop architecture:
+
+```json
+{
+  "name": "reflective",
+  "planner": { "type": "llm" },
+  "executor": { "type": "rag" },
+  "evaluator": { "type": "keyword_overlap", "pass_threshold": 0.6 },
+  "reflection": { "enabled": true },
+  "retries": 2
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `name` | Config name, used as its label if `--labels` isn't given. |
+| `planner.type` | `"none"` (skip planning) or `"llm"`. |
+| `executor.type` | `"single_call"` (answers from the task alone, no grounding) or `"rag"` (grounds its answer in the row's `context`). |
+| `evaluator.type` | `"keyword_overlap"` — the only evaluator today; scores the answer against the reference's content words. `pass_threshold` (default `0.6`) is the minimum coverage to pass. |
+| `reflection.enabled` | Whether a failed attempt gets a critique (built from the evaluator's missing terms) before retrying. |
+| `retries` | Max retries after the first attempt. Restarts from the planner each retry, so a critique can correct a bad plan, not just a bad answer. |
+
+The loop runs against a fully deterministic mock model backend (see
+`tracelens.MockModelClient`) — no API key or network access needed. A real
+provider adapter isn't wired in yet.
+
 ## Using it as a library
 
 ```python
@@ -157,6 +239,17 @@ baseline = ExecutionTrace.load("examples/sample_trace.json")
 reflective = ExecutionTrace.load("examples/sample_trace_reflective.json")
 comparison = compare_traces([("baseline", baseline), ("reflective", reflective)])
 print(comparison.best)  # {"success": "reflective", "total_cost": "baseline", ...}
+
+# Actually run loop configs over a dataset (instead of loading pre-made traces)
+from tracelens import Dataset, LoopConfig, run_experiment, compare_experiments
+
+dataset = Dataset.load("examples/datasets/insurance_faq.json")
+baseline_cfg = LoopConfig.load("examples/configs/baseline.json")
+reflective_cfg = LoopConfig.load("examples/configs/reflective.json")
+
+entries = run_experiment(dataset, [("baseline", baseline_cfg), ("reflective", reflective_cfg)])
+experiment_comparison = compare_experiments(entries)
+print(experiment_comparison.best)  # {"success_rate": "reflective", "avg_cost": "baseline", ...}
 ```
 
 ## Development

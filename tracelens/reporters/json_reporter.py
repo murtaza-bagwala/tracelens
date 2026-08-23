@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 
+from tracelens.models.experiment import ExperimentComparison
 from tracelens.models.review import BatchSummary, Comparison, Review
 
 
@@ -78,3 +79,28 @@ def batch_to_dict(summary: BatchSummary) -> dict:
 
 def batch_to_json(summary: BatchSummary, indent: int = 2) -> str:
     return json.dumps(batch_to_dict(summary), indent=indent)
+
+
+def experiment_comparison_to_dict(comparison: ExperimentComparison) -> dict:
+    return {
+        "entries": [
+            {
+                "label": entry.label,
+                "config": {
+                    "name": entry.config.name,
+                    "planner": entry.config.planner,
+                    "executor": entry.config.executor,
+                    "evaluator": entry.config.evaluator,
+                    "reflection": entry.config.reflection,
+                    "retries": entry.config.retries,
+                },
+                "batch": batch_to_dict(entry.batch),
+            }
+            for entry in comparison.entries
+        ],
+        "best": dict(comparison.best),
+    }
+
+
+def experiment_comparison_to_json(comparison: ExperimentComparison, indent: int = 2) -> str:
+    return json.dumps(experiment_comparison_to_dict(comparison), indent=indent)
